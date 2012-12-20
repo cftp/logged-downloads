@@ -48,7 +48,7 @@ class CFTP_Logged_Downloads extends CFTP_Logged_Downloads_Plugin {
 		$this->add_filter( 'the_content' );
 		$this->add_filter( 'wp_generate_attachment_metadata', null, null, 2 );
 		
-		$this->version = 1;
+		$this->version = 2;
 	}
 	
 	function ajax_log_download() {
@@ -233,6 +233,26 @@ class CFTP_Logged_Downloads extends CFTP_Logged_Downloads_Plugin {
 		if ( $version < 1 ) {
 			flush_rewrite_rules();
 			error_log( "Logged Downloads: Flushed rewrite rules" );
+		}
+
+		if ( $version < 2 ) {
+			$args = array(
+				'post_type' => 'logged_download',
+				'post_status' => 'any',
+				'fields' => 'ids',
+				'posts_per_page' => -1,
+			);
+			$downloads = new WP_Query( $args );
+			foreach ( $downloads->posts as $download_id ) {
+				if ( $leechers = get_post_meta( $download_id, '_cftp_logged_downloaded_leechers', true ) ) {
+					foreach ( $leechers as $user_id => & $leecher ) {
+						$user = new WP_User( $user_id );
+						$leecher[ 'last_name' ] = get_user_meta( $user->ID, 'last_name', true );
+					}
+					update_post_meta( $download_id, '_cftp_logged_downloaded_leechers', $leechers );
+				}
+			}
+			error_log( "Logged Downloads: Updated leechers" );
 		}
 
 		error_log( "Logged Downloads: Done upgrade" );
