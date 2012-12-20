@@ -196,6 +196,7 @@ class CFTP_Logged_Downloads extends CFTP_Logged_Downloads_Plugin {
 			'post_type' => 'attachment',
 			'post_parent' => $post->ID,
 			'post_status' => 'inherit',
+			'fields' => 'ids',
 		);
 		$attachments = new WP_Query( $args );
 		$vars = array();
