@@ -2,9 +2,9 @@
 
 /*
 Plugin Name: Logged Downloads
-Plugin URI: http://codeforthepeople.com/wordpress/ld
+Plugin URI: https://github.com/cftp/logged-downloads
 Description: Provides a post type for downloads, only visible to logged in users, and records who downloads what.
-Version: 0.1
+Version: 1.0
 Author: Simon Wheatley (Code for the People)
 Author URI: http://codeforthepeople.com/
 */
