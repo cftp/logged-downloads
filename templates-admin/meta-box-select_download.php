@@ -16,11 +16,9 @@
 							echo esc_html( strtoupper( $matches[1] ) );
 						else
 							echo strtoupper( str_replace( 'image/', '', get_post_mime_type() ) );
-					?>,
-					<?php 
 						$metadata = get_post_meta( $selected_attachment_id, '_wp_attachment_metadata', true );
 	//					var_dump( $metadata );
-						echo esc_html( $metadata[ 'cftp_hr_filesize' ] );
+						echo esc_html( isset( $metadata[ 'cftp_hr_filesize' ] ) ? ', ' . $metadata[ 'cftp_hr_filesize' ] : '' );
 					?>)
 					<?php // var_dump( get_post_meta( get_the_ID() ) ); ?>
 				</label><br />
