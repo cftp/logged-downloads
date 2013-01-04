@@ -2,7 +2,7 @@
 <?php wp_nonce_field( 'cftp_logged_downloads_selected_attachment', '_cftp_logged_downloads_nonce' ); ?>
 
 <p>
-	<?php if ( $attachments->have_posts() ) : ?>
+	<?php if ( ! empty( $attachments->posts ) ) : ?>
 
 		<label for="cftp_logged_selected_attachment_id">
 			Select attachment to use as download:<br />
