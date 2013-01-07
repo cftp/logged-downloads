@@ -45,15 +45,17 @@ class CFTP_Logged_Downloads extends CFTP_Logged_Downloads_Plugin {
 		$this->add_action( 'init' );
 		$this->add_action( 'save_post', null, null, 2 );
 		$this->add_action( 'wp_enqueue_scripts', 'wp_enqueue_scripts_early', 0 );
+		$this->add_filter( 'ld_wrap_content', 'wrap_content' );
 		$this->add_filter( 'the_content' );
 		$this->add_filter( 'wp_generate_attachment_metadata', null, null, 2 );
 		
-		$this->version = 2;
+		$this->version = 3;
 	}
 	
 	function ajax_log_download() {
 		$user_id = isset( $_GET[ 'user_id' ] ) ? absint( $_GET[ 'user_id' ] ) : 0;
 		$post_id = isset( $_GET[ 'post_id' ] ) ? absint( $_GET[ 'post_id' ] ) : 0;
+		$link = isset( $_GET[ 'link' ] ) ? esc_url( $_GET[ 'link' ] ) : false;
 		$user = new WP_User( $user_id );
 		$post = get_post( $post_id );
 		$leechers = get_post_meta( $post_id, '_cftp_logged_downloaded_leechers', true );
@@ -73,8 +75,12 @@ class CFTP_Logged_Downloads extends CFTP_Logged_Downloads_Plugin {
 			'role' => get_user_meta( $user->ID, 'ir_role', true ),
 		);
 		update_post_meta( $post_id, '_cftp_logged_downloaded_leechers', $leechers );
-		$selected_attachment_id = get_post_meta( $post_id, '_cftp_logged_download_selected_attachment_id', true );
-		$url = wp_get_attachment_url( $selected_attachment_id );
+		if ( $link ) {
+			$url = $link;
+		} else {
+			$selected_attachment_id = get_post_meta( $post_id, '_cftp_logged_download_selected_attachment_id', true );
+			$url = wp_get_attachment_url( $selected_attachment_id );
+		}
 		$data = array( 'redirect' => $url );
 		echo json_encode( $data );
 		exit;
@@ -174,6 +180,16 @@ class CFTP_Logged_Downloads extends CFTP_Logged_Downloads_Plugin {
 		return $metadata;
 	}
 
+	/**
+	 * Hooks the WP the_content filter to add the download link section
+	 * to the bottom of logged_download posts which have a selected
+	 * attachment ID.
+	 * 
+	 * @filter the_content
+	 * 
+	 * @param string $content The content
+	 * @return string The content
+	 */
 	function the_content( $content ) {
 		$post = get_post( get_the_ID() );
 		if ( 'logged_download' != $post->post_type )
@@ -181,8 +197,40 @@ class CFTP_Logged_Downloads extends CFTP_Logged_Downloads_Plugin {
 		
 		$vars = array();
 		$vars[ 'post_id' ] = $post->ID;
+		$vars[ 'token' ] = 'the_content';
 		$vars[ 'selected_attachment_id' ] = get_post_meta( $post->ID, '_cftp_logged_download_selected_attachment_id', true );
-		$content = $content . $this->capture( 'download-link.php', $vars );
+		$content = $content . $this->capture( 'content-download-link.php', $vars );
+		
+		return $content;
+	}
+
+	/**
+	 * Hooks the Logged Downloads ld_wrap_content filter to wrap a
+	 * block of HTML in the relevant DIV element and initiate logging
+	 * on it. Any link (A) element in that block will have clicks
+	 * logged as downloads.
+	 * 
+	 * Must be used in The Loop.
+	 * 
+	 * If the current post in the loop is not a logged_download post
+	 * then nothing will be logged.
+	 * 
+	 * @filter ld_wrap_content
+	 * 
+	 * @param string $content An HTML block to wrap with logging
+	 * @return string The 
+	 */
+	function wrap_content( $content ) {
+		$post = get_post( get_the_ID() );
+		if ( 'logged_download' != $post->post_type )
+			return $content;
+		
+		$vars = array();
+		$vars[ 'post_id' ] = $post->ID;
+		$vars[ 'token' ] = uniqid();
+		$vars[ 'selected_attachment_id' ] = false;
+		$vars[ 'content' ] = $content;
+		$content = $this->capture( 'wrap-download-link.php', $vars );
 		
 		return $content;
 	}
