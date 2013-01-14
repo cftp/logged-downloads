@@ -2,6 +2,8 @@
 
 <?php if ( $downloaders ) : ?>
 
+	<p><a href="<?php echo esc_url( $downloaders_csv ); ?>">Download list as CSV file</a></p>
+
 	<ul>
 		<?php foreach ( $downloaders as & $downloader ) : ?>
 

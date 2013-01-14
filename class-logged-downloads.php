@@ -1,6 +1,6 @@
 <?php
  
-/*  Copyright 2012 Code for the People Ltd
+/*  Copyright 2013 Code for the People Ltd
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -45,6 +45,8 @@ class CFTP_Logged_Downloads extends CFTP_Logged_Downloads_Plugin {
 		$this->add_action( 'init' );
 		$this->add_action( 'save_post', null, null, 2 );
 		$this->add_action( 'wp_enqueue_scripts', 'wp_enqueue_scripts_early', 0 );
+		$this->add_action( 'load-post.php', 'load_post_screen' );
+
 		$this->add_filter( 'ld_wrap_content', 'wrap_content' );
 		$this->add_filter( 'the_content' );
 		$this->add_filter( 'wp_generate_attachment_metadata', null, null, 2 );
@@ -52,6 +54,73 @@ class CFTP_Logged_Downloads extends CFTP_Logged_Downloads_Plugin {
 		$this->version = 3;
 	}
 	
+	/**
+	 * Hook fired on the post editing screen. Controller for sending a CSV file of the post's
+	 * "Downloaders" to the user's browser.
+	 *
+	 * @author John Blackbourn
+	 * @since 1.2
+	 * @return null
+	 */
+	function load_post_screen() {
+
+		$post = get_post( $_GET['post'] );
+
+		if ( 'logged_download' != $post->post_type )
+			return;
+		if ( !isset( $_GET['downloaders'] ) )
+			return;
+		if ( 'csv' != $_GET['downloaders'] )
+			return;
+
+		check_admin_referer( "downloaders_csv_{$post->ID}" );
+
+		$leechers = get_post_meta( $post->ID, '_cftp_logged_downloaded_leechers', true );
+
+		if ( empty( $leechers ) )
+			wp_die( 'No recorded downloads yet.' );
+
+		header( sprintf( 'Content-Type: text/csv; charset=%s', get_bloginfo( 'charset' ) ) );
+	#	The post name can be quite long so we'd better stick with the post ID in the filename for now
+	#	header( sprintf( 'Content-Disposition: attachment; filename=downloaders-%s.csv', $post->post_name ) );
+		header( sprintf( 'Content-Disposition: attachment; filename=downloaders-%s.csv', $post->ID ) );
+
+		$file = fopen( 'php://output', 'w' );
+
+		# Heading
+	#	fputcsv( $file, array(
+	#		sprintf( 'List of downloaders for "%s"', get_the_title( $post->ID ) ),
+	#	) );
+
+		# Blank line:
+	#	fputcsv( $file, array() );
+
+		# Column headers:
+		fputcsv( $file, array(
+			'First Name',
+			'Last Name',
+			'Role',
+			'Employer',
+			'Email Address'
+		) );
+
+		foreach ( $leechers as $leecher ) {
+
+			# Row data:
+			fputcsv( $file, array(
+				$leecher['first_name'],
+				$leecher['last_name'],
+				$leecher['role'],
+				$leecher['employer'],
+				$leecher['user_email'] )
+			 );
+
+		}
+
+		die();
+
+	}
+
 	function ajax_log_download() {
 		$user_id = isset( $_GET[ 'user_id' ] ) ? absint( $_GET[ 'user_id' ] ) : 0;
 		$post_id = isset( $_GET[ 'post_id' ] ) ? absint( $_GET[ 'post_id' ] ) : 0;
@@ -257,6 +326,9 @@ class CFTP_Logged_Downloads extends CFTP_Logged_Downloads_Plugin {
 		$downloaders = get_post_meta( $post->ID, '_cftp_logged_downloaded_leechers', true );
 		$vars = array();
 		$vars[ 'downloaders' ] = $downloaders;
+		$vars[ 'downloaders_csv' ] = wp_nonce_url( add_query_arg( array(
+			'downloaders' => 'csv',
+		), get_edit_post_link( $post->ID ) ), "downloaders_csv_{$post->ID}" );
 		$this->render_admin( 'meta-box-downloaders.php', $vars );
 	}
 

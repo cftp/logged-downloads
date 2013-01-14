@@ -4,12 +4,12 @@
 Plugin Name: Logged Downloads
 Plugin URI: https://github.com/cftp/logged-downloads
 Description: Provides a post type for downloads, only visible to logged in users, and records who downloads what.
-Version: 1.1
+Version: 1.2
 Author: Simon Wheatley (Code for the People)
 Author URI: http://codeforthepeople.com/
 */
  
-/*  Copyright 2012 Code for the People Ltd
+/*  Copyright 2013 Code for the People Ltd
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
