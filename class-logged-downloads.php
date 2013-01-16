@@ -45,7 +45,10 @@ class CFTP_Logged_Downloads extends CFTP_Logged_Downloads_Plugin {
 		$this->add_action( 'init' );
 		$this->add_action( 'save_post', null, null, 2 );
 		$this->add_action( 'wp_enqueue_scripts', 'wp_enqueue_scripts_early', 0 );
+		$this->add_action( 'admin_enqueue_scripts' );
 		$this->add_action( 'load-post.php', 'load_post_screen' );
+		$this->add_action( 'admin_menu' );
+		$this->add_action( 'load-logged_download_page_export_logged_downloads', 'load_export_screen' );
 
 		$this->add_filter( 'ld_wrap_content', 'wrap_content' );
 		$this->add_filter( 'the_content' );
@@ -55,11 +58,128 @@ class CFTP_Logged_Downloads extends CFTP_Logged_Downloads_Plugin {
 	}
 	
 	/**
+	 * Register our admin menus
+	 *
+	 * @author John Blackbourn
+	 * @since  1.2.1
+	 * @return null
+	 */
+	function admin_menu() {
+
+		$pto = get_post_type_object( 'logged_download' );
+
+		add_submenu_page(
+			'edit.php?post_type=logged_download',
+			'Export Subscribers', # @TODO i18n everywhere
+			'Export Subscribers',
+			$pto->cap->edit_posts,
+			'export_logged_downloads',
+			array( $this, 'export_screen' )
+		);
+
+	}
+
+	/**
+	 * Output the form for exporting subscribers
+	 *
+	 * @author John Blackbourn
+	 * @since  1.2.1
+	 * @return null
+	 */
+	function export_screen() {
+
+		?>
+		<div class="wrap">
+
+			<?php screen_icon(); ?>
+			<h2>Export Subscribers</h2>
+			<p class="description"><?php printf( 'Download a CSV file of %s subscribers.', get_bloginfo('name') ); ?></p>
+
+			<form action="" method="post">
+				<input type="hidden" name="subscribers" value="csv" />
+				<?php wp_nonce_field( 'subscribers_csv' ); ?>
+				<table class="form-table">
+					<tr>
+						<th>Registered After <span class="description hide-if-js">(yyyy-mm-dd)</span></th>
+						<td><input type="text" name="start_date" class="logged_downloads_datepicker" value="<?php echo esc_attr( date( 'Y-m-d' ) ); ?>" /></td>
+					</tr>
+				</table>
+				<?php submit_button( 'Download' ); ?>
+			</form>
+
+		</div>
+		<?php
+
+	}
+
+	/**
+	 * Hook fired on the Export Subscribers. Controller for sending a CSV file of subscribers
+	 * to the user's browser.
+	 *
+	 * @author John Blackbourn
+	 * @since 1.2.1
+	 * @return null
+	 */
+	function load_export_screen() {
+
+		if ( !isset( $_POST['subscribers'] ) )
+			return;
+		if ( 'csv' != $_POST['subscribers'] )
+			return;
+
+		check_admin_referer( 'subscribers_csv' );
+
+		$this->export_start_date = stripslashes( $_POST['start_date'] );
+
+		if ( !isset( $_POST['start_date'] ) or !preg_match( '/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/', $this->export_start_date ) )
+			wp_die( 'Please enter a valid start date.' );
+
+		$this->add_filter( 'pre_user_query' );
+		$users = get_users( array(
+			'role' => 'subscriber'
+		) );
+		$this->remove_filter( 'pre_user_query' );
+
+		if ( empty( $users ) )
+			wp_die( 'No subscribers found.' );
+
+		foreach ( $users as $user ) {
+			$subscribers[] = array(
+				'ID'         => $user->ID, 
+				'first_name' => get_user_meta( $user->ID, 'first_name', true ),
+				'last_name'  => get_user_meta( $user->ID, 'last_name', true ),
+				'employer'   => get_user_meta( $user->ID, 'ir_employer', true ),
+				'role'       => get_user_meta( $user->ID, 'ir_role', true ),
+				'user_email' => $user->user_email
+			);
+		}
+
+		$this->export_users( $subscribers, 'subscribers' );
+
+	}
+
+	/**
+	 * Action fired on the user query when we're exporting subscribers to limit the query by registered date.
+	 *
+	 * @param  WP_User_Query $query The WP_User_Query object
+	 * @author John Blackbourn
+	 * @since  1.2.1
+	 * @return null
+	 */
+	function pre_user_query( $query ) {
+
+		global $wpdb;
+
+		$query->query_where .= $wpdb->prepare( " AND {$wpdb->users}.user_registered >= %s", $this->export_start_date );
+
+	}
+
+	/**
 	 * Hook fired on the post editing screen. Controller for sending a CSV file of the post's
 	 * "Downloaders" to the user's browser.
 	 *
 	 * @author John Blackbourn
-	 * @since 1.2
+	 * @since  1.2
 	 * @return null
 	 */
 	function load_post_screen() {
@@ -80,20 +200,25 @@ class CFTP_Logged_Downloads extends CFTP_Logged_Downloads_Plugin {
 		if ( empty( $leechers ) )
 			wp_die( 'No recorded downloads yet.' );
 
+		$this->export_users( $leechers, $post->ID );
+
+	}
+
+	/**
+	 * Send a CSV file of $users to the user's browser.
+	 *
+	 * @author John Blackbourn
+	 * @param  array  $users    The list of users to export
+	 * @param  string $filename The filename for the export
+	 * @since  1.2.1
+	 * @return null
+	 */
+	function export_users( array $users, $filename ) {
+
 		header( sprintf( 'Content-Type: text/csv; charset=%s', get_bloginfo( 'charset' ) ) );
-	#	The post name can be quite long so we'd better stick with the post ID in the filename for now
-	#	header( sprintf( 'Content-Disposition: attachment; filename=downloaders-%s.csv', $post->post_name ) );
-		header( sprintf( 'Content-Disposition: attachment; filename=downloaders-%s.csv', $post->ID ) );
+		header( sprintf( 'Content-Disposition: attachment; filename=downloaders-%s.csv', $filename ) );
 
 		$file = fopen( 'php://output', 'w' );
-
-		# Heading
-	#	fputcsv( $file, array(
-	#		sprintf( 'List of downloaders for "%s"', get_the_title( $post->ID ) ),
-	#	) );
-
-		# Blank line:
-	#	fputcsv( $file, array() );
 
 		# Column headers:
 		fputcsv( $file, array(
@@ -104,15 +229,15 @@ class CFTP_Logged_Downloads extends CFTP_Logged_Downloads_Plugin {
 			'Email Address'
 		) );
 
-		foreach ( $leechers as $leecher ) {
+		foreach ( $users as $user ) {
 
 			# Row data:
 			fputcsv( $file, array(
-				$leecher['first_name'],
-				$leecher['last_name'],
-				$leecher['role'],
-				$leecher['employer'],
-				$leecher['user_email'] )
+				$user['first_name'],
+				$user['last_name'],
+				$user['role'],
+				$user['employer'],
+				$user['user_email'] )
 			 );
 
 		}
@@ -220,7 +345,7 @@ class CFTP_Logged_Downloads extends CFTP_Logged_Downloads_Plugin {
 	function wp_enqueue_scripts_early() {
 		if ( ! is_singular( 'logged_download' ) && ! is_post_type_archive( 'logged_download' ) )
 			return;
-		wp_enqueue_script( 'logged-downloads', $this->url( 'js/logged-downloads.js' ), array( 'jquery' ), time() );
+		wp_enqueue_script( 'logged-downloads', $this->url( 'js/logged-downloads.js' ), array( 'jquery' ), time() ); # <- time()? Nasty.
 		$data = array( 
 			'user_id' => get_current_user_id(),
 			'ajax_url' => admin_url( 'admin-ajax.php' ),
@@ -228,6 +353,11 @@ class CFTP_Logged_Downloads extends CFTP_Logged_Downloads_Plugin {
 		wp_localize_script( 'logged-downloads', 'cftp_ld', $data );
 	}
 	
+	function admin_enqueue_scripts() {
+		if ( isset( $_GET['page'] ) and ( 'export_logged_downloads' == $_GET['page'] ) )
+			wp_enqueue_script( 'logged-downloads-admin', $this->url( 'js/admin.js' ), array( 'jquery', 'jquery-ui-datepicker' ) );
+	}
+
 	/**
 	 * Hooks the WP wp_generate_attachment_metadata filter to add information 
 	 * about filesize, human readable and machine useful.

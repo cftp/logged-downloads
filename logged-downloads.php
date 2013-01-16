@@ -4,7 +4,7 @@
 Plugin Name: Logged Downloads
 Plugin URI: https://github.com/cftp/logged-downloads
 Description: Provides a post type for downloads, only visible to logged in users, and records who downloads what.
-Version: 1.2
+Version: 1.2.1
 Author: Simon Wheatley (Code for the People)
 Author URI: http://codeforthepeople.com/
 */
